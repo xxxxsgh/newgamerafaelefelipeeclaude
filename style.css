@@ -1,0 +1,141 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #000;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+#game-container {
+    position: relative;
+    width: 960px;
+    height: 540px;
+    box-shadow: 0 0 40px rgba(255, 200, 0, 0.35);
+    border: 4px solid #2a2a2a;
+    background: #000;
+}
+
+#game {
+    display: block;
+    width: 100%;
+    height: 100%;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+}
+
+#hud {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 18px;
+    font-weight: bold;
+    text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+    color: #ffdd33;
+    z-index: 10;
+    pointer-events: none;
+    letter-spacing: 2px;
+}
+
+#hud span {
+    color: #fff;
+}
+
+.overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+    text-align: center;
+    padding: 20px;
+}
+
+.overlay.hidden {
+    display: none;
+}
+
+.overlay h1 {
+    font-size: 64px;
+    color: #ffdd33;
+    letter-spacing: 6px;
+    text-shadow: 4px 4px 0 #aa4400, 8px 8px 0 #000;
+    margin-bottom: 12px;
+}
+
+.subtitle {
+    font-size: 20px;
+    color: #ccc;
+    margin-bottom: 30px;
+    letter-spacing: 3px;
+}
+
+.controls {
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid #444;
+    padding: 20px 30px;
+    margin-bottom: 28px;
+    min-width: 380px;
+}
+
+.controls h3 {
+    color: #ffdd33;
+    margin-bottom: 12px;
+    letter-spacing: 3px;
+}
+
+.controls p {
+    font-size: 16px;
+    margin: 6px 0;
+    color: #ddd;
+}
+
+.key {
+    display: inline-block;
+    background: #333;
+    border: 2px solid #666;
+    border-radius: 4px;
+    padding: 2px 10px;
+    font-weight: bold;
+    color: #fff;
+    margin: 0 2px;
+    min-width: 26px;
+}
+
+button {
+    background: #ffdd33;
+    color: #000;
+    border: none;
+    padding: 14px 42px;
+    font-size: 22px;
+    font-weight: bold;
+    font-family: inherit;
+    letter-spacing: 4px;
+    cursor: pointer;
+    border-radius: 4px;
+    box-shadow: 0 4px 0 #aa8800;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+
+button:hover {
+    background: #ffe866;
+}
+
+button:active {
+    transform: translateY(4px);
+    box-shadow: 0 0 0 #aa8800;
+}

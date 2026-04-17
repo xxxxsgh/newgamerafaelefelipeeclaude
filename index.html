@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Space Slug - Metal Slug Style</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <div id="hud">
+            <div id="score">PONTOS: <span id="score-value">0</span></div>
+            <div id="lives">VIDAS: <span id="lives-value">3</span></div>
+            <div id="weapon">ARMA: <span id="weapon-value">NORMAL</span></div>
+        </div>
+        <canvas id="game" width="960" height="540"></canvas>
+        <div id="menu" class="overlay">
+            <h1>SPACE SLUG</h1>
+            <p class="subtitle">Estilo Metal Slug</p>
+            <div class="controls">
+                <h3>Controles</h3>
+                <p><span class="key">A</span> / <span class="key">D</span> ou <span class="key">←</span> / <span class="key">→</span> - Mover</p>
+                <p><span class="key">W</span> / <span class="key">Espaço</span> - Pular</p>
+                <p><span class="key">J</span> - Atirar</p>
+                <p><span class="key">K</span> - Tiro carregado (segure)</p>
+            </div>
+            <button id="start-btn">INICIAR</button>
+        </div>
+        <div id="gameover" class="overlay hidden">
+            <h1>GAME OVER</h1>
+            <p>Pontuação: <span id="final-score">0</span></p>
+            <button id="restart-btn">JOGAR NOVAMENTE</button>
+        </div>
+    </div>
+    <script src="game.js"></script>
+</body>
+</html>

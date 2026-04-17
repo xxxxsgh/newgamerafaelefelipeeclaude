@@ -13,18 +13,62 @@ const H = canvas.height;
 const GROUND_Y = H - 80;
 
 // ------------------------------------------------------------
-// Assets
+// Sprite configuration — frame rects were auto-detected from the
+// sprite sheets by scanning for non-transparent regions.
+// Each animation scales frames to a consistent visual height.
 // ------------------------------------------------------------
+const TARGET_H = 96; // visual height of character on screen
+
 const SPRITE_CONFIG = {
-    idle:  { src: 'assets/idle.png',  frames: 1,  fw: 0, fh: 0, fps: 1  },
-    run:   { src: 'assets/run.png',   frames: 10, fw: 0, fh: 0, fps: 16 },
-    jump:  { src: 'assets/jump.png',  frames: 8,  fw: 0, fh: 0, fps: 12 },
-    shoot: { src: 'assets/shoot.png', frames: 3,  fw: 0, fh: 0, fps: 14 }
+    idle: {
+        src: 'assets/idle.png',
+        fps: 1,
+        frames: [{ x: 270, y: 96, w: 153, h: 183 }]
+    },
+    run: {
+        src: 'assets/run.png',
+        fps: 16,
+        frames: [
+            { x: 38,  y: 157, w: 56, h: 57 },
+            { x: 99,  y: 156, w: 50, h: 58 },
+            { x: 164, y: 155, w: 43, h: 59 },
+            { x: 222, y: 156, w: 49, h: 57 },
+            { x: 281, y: 155, w: 50, h: 59 },
+            { x: 344, y: 157, w: 54, h: 57 },
+            { x: 406, y: 156, w: 49, h: 58 },
+            { x: 467, y: 155, w: 46, h: 59 },
+            { x: 528, y: 156, w: 48, h: 58 },
+            { x: 583, y: 158, w: 55, h: 56 }
+        ]
+    },
+    jump: {
+        src: 'assets/jump.png',
+        fps: 10,
+        frames: [
+            { x: 37,  y: 272, w: 65, h: 78 },
+            { x: 111, y: 216, w: 69, h: 77 },
+            { x: 188, y: 182, w: 61, h: 73 },
+            { x: 265, y: 129, w: 69, h: 77 },
+            { x: 346, y: 100, w: 68, h: 74 },
+            { x: 425, y: 102, w: 67, h: 78 },
+            { x: 503, y: 162, w: 65, h: 78 },
+            { x: 574, y: 208, w: 66, h: 81 }
+        ]
+    },
+    shoot: {
+        src: 'assets/shoot.png',
+        fps: 14,
+        // bottom row: rapid fire with muzzle flashes
+        frames: [
+            { x: 35,  y: 286, w: 75, h: 69 },
+            { x: 124, y: 287, w: 91, h: 71 },
+            { x: 230, y: 287, w: 96, h: 69 }
+        ]
+    }
 };
 
 const SPRITES = {};
-let assetsReady = false;
-let assetsFailed = false;
+let spritesMissing = false;
 
 function loadImage(path) {
     return new Promise((resolve) => {
@@ -36,25 +80,15 @@ function loadImage(path) {
 }
 
 async function loadAssets() {
-    const results = await Promise.all(
-        Object.entries(SPRITE_CONFIG).map(async ([key, cfg]) => {
-            const img = await loadImage(cfg.src);
-            return [key, img, cfg];
-        })
-    );
-    let allOk = true;
-    for (const [key, img, cfg] of results) {
+    for (const [key, cfg] of Object.entries(SPRITE_CONFIG)) {
+        const img = await loadImage(cfg.src);
         if (img) {
-            cfg.fw = Math.floor(img.width / cfg.frames);
-            cfg.fh = img.height;
             SPRITES[key] = { img, cfg };
         } else {
-            allOk = false;
             SPRITES[key] = null;
+            spritesMissing = true;
         }
     }
-    assetsReady = allOk;
-    assetsFailed = !allOk;
 }
 
 // ------------------------------------------------------------
@@ -71,26 +105,26 @@ class Animation {
         const sprite = SPRITES[this.key];
         if (!sprite) return;
         const { frames, fps } = sprite.cfg;
-        if (frames <= 1) return;
+        if (frames.length <= 1) return;
         this.time += dt;
         const frameTime = 1 / fps;
         while (this.time >= frameTime) {
             this.time -= frameTime;
-            this.frame = (this.frame + 1) % frames;
+            this.frame = (this.frame + 1) % frames.length;
         }
     }
-    draw(cx, cy, flipX) {
+    draw(cx, cy, flipX, alpha = 1) {
         const sprite = SPRITES[this.key];
         if (!sprite) return false;
-        const { fw, fh } = sprite.cfg;
+        const f = sprite.cfg.frames[this.frame];
+        const scale = TARGET_H / f.h;
+        const dw = f.w * scale;
+        const dh = f.h * scale;
         ctx.save();
+        ctx.globalAlpha = alpha;
         ctx.translate(cx, cy);
         if (flipX) ctx.scale(-1, 1);
-        ctx.drawImage(
-            sprite.img,
-            this.frame * fw, 0, fw, fh,
-            -fw / 2, -fh / 2, fw, fh
-        );
+        ctx.drawImage(sprite.img, f.x, f.y, f.w, f.h, -dw / 2, -dh / 2, dw, dh);
         ctx.restore();
         return true;
     }
@@ -120,17 +154,17 @@ function consumeKeyOnce(code) {
 // Player
 // ------------------------------------------------------------
 const PLAYER_W = 56;
-const PLAYER_H = 72;
+const PLAYER_H = 88;
 
 class Player {
     constructor() {
-        this.reset();
         this.anims = {
             idle: new Animation('idle'),
             run:  new Animation('run'),
             jump: new Animation('jump'),
             shoot: new Animation('shoot')
         };
+        this.reset();
     }
     reset() {
         this.x = 120;
@@ -156,37 +190,31 @@ class Player {
         const JUMP_V = -620;
         const GRAVITY = 1800;
 
-        // horizontal
         let move = 0;
         if (keys['KeyA'] || keys['ArrowLeft']) move -= 1;
         if (keys['KeyD'] || keys['ArrowRight']) move += 1;
         this.vx = move * SPEED;
         if (move !== 0) this.facing = move;
 
-        // jump
         if ((consumeKeyOnce('KeyW') || consumeKeyOnce('Space') || consumeKeyOnce('ArrowUp')) && this.onGround) {
             this.vy = JUMP_V;
             this.onGround = false;
             this.anims.jump.reset();
         }
 
-        // gravity + position
         this.vy += GRAVITY * dt;
         this.x += this.vx * dt;
         this.y += this.vy * dt;
 
-        // ground collision
         if (this.y + PLAYER_H / 2 >= GROUND_Y) {
             this.y = GROUND_Y - PLAYER_H / 2;
             this.vy = 0;
             this.onGround = true;
         }
 
-        // bounds
         if (this.x < PLAYER_W / 2) this.x = PLAYER_W / 2;
         if (this.x > W - PLAYER_W / 2) this.x = W - PLAYER_W / 2;
 
-        // shooting
         this.shootCooldown -= dt;
         this.shootAnimTimer -= dt;
 
@@ -201,7 +229,6 @@ class Player {
             this.charging = 0;
         }
 
-        // animation update
         if (!this.onGround) this.anims.jump.update(dt);
         else if (Math.abs(this.vx) > 10) this.anims.run.update(dt);
         else this.anims.idle.update(dt);
@@ -211,8 +238,8 @@ class Player {
         if (this.invuln > 0) this.invuln -= dt;
     }
     fire(type) {
-        const muzzleX = this.x + this.facing * 32;
-        const muzzleY = this.y - 6;
+        const muzzleX = this.x + this.facing * 38;
+        const muzzleY = this.y + 4;
         if (type === 'charged') {
             bullets.push(new Bullet(muzzleX, muzzleY, this.facing * 900, 'charged'));
             this.shootCooldown = 0.35;
@@ -240,52 +267,44 @@ class Player {
         }
     }
     draw() {
-        const blink = this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0;
-        if (blink) { ctx.globalAlpha = 0.4; }
-
+        const alpha = (this.invuln > 0 && Math.floor(this.invuln * 20) % 2 === 0) ? 0.4 : 1;
         const flip = this.facing < 0;
         let drew = false;
 
-        if (!this.onGround) {
-            drew = this.anims.jump.draw(this.x, this.y, flip);
+        if (this.shootAnimTimer > 0 && this.onGround && Math.abs(this.vx) < 10) {
+            drew = this.anims.shoot.draw(this.x, this.y, flip, alpha);
+        } else if (!this.onGround) {
+            drew = this.anims.jump.draw(this.x, this.y, flip, alpha);
         } else if (Math.abs(this.vx) > 10) {
-            drew = this.anims.run.draw(this.x, this.y, flip);
+            drew = this.anims.run.draw(this.x, this.y, flip, alpha);
         } else {
-            drew = this.anims.idle.draw(this.x, this.y, flip);
+            drew = this.anims.idle.draw(this.x, this.y, flip, alpha);
         }
 
-        if (this.shootAnimTimer > 0) {
-            this.anims.shoot.draw(this.x, this.y, flip);
+        if (!drew) {
+            ctx.globalAlpha = alpha;
+            drawPlayerFallback(this.x, this.y, this.facing);
+            ctx.globalAlpha = 1;
         }
-
-        if (!drew) drawPlayerFallback(this.x, this.y, this.facing);
-
-        ctx.globalAlpha = 1;
     }
 }
 
 function drawPlayerFallback(x, y, facing) {
-    // retângulos coloridos estilizados quando sprites não existem
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(facing, 1);
-    // corpo
     ctx.fillStyle = '#5a6d3a';
     ctx.fillRect(-18, -20, 36, 44);
-    // capacete
     ctx.fillStyle = '#2a2a2a';
     ctx.beginPath();
     ctx.arc(0, -28, 14, 0, Math.PI * 2);
     ctx.fill();
-    // viseira
     ctx.fillStyle = '#5db7d6';
     ctx.beginPath();
     ctx.arc(4, -28, 9, 0, Math.PI * 2);
     ctx.fill();
-    // arma
     ctx.fillStyle = '#222';
     ctx.fillRect(6, -6, 34, 8);
-    // pernas
     ctx.fillStyle = '#4a5a2e';
     ctx.fillRect(-14, 24, 10, 12);
     ctx.fillRect(4, 24, 10, 12);
@@ -333,13 +352,14 @@ class Bullet {
 }
 
 // ------------------------------------------------------------
-// Enemy
+// Enemy — uses same sprites, rendered with red tint
 // ------------------------------------------------------------
 class Enemy {
     constructor(x) {
         this.x = x;
         this.y = GROUND_Y - PLAYER_H / 2;
         this.vx = 0;
+        this.facing = 1;
         this.hp = 2;
         this.dead = false;
         this.shootTimer = 1 + Math.random() * 1.5;
@@ -367,7 +387,7 @@ class Enemy {
             this.shootTimer = 1.4 + Math.random() * 1.2;
             bullets.push(new Bullet(
                 this.x + this.facing * 28,
-                this.y - 6,
+                this.y + 4,
                 this.facing * 420,
                 'normal',
                 true
@@ -388,18 +408,30 @@ class Enemy {
     }
     draw() {
         const flip = this.facing < 0;
-        // tint enemies red via composite
-        ctx.save();
-        const drew = (Math.abs(this.vx) > 10
-            ? this.anims.run.draw(this.x, this.y, flip)
-            : this.anims.idle.draw(this.x, this.y, flip));
+        const anim = (Math.abs(this.vx) > 10) ? this.anims.run : this.anims.idle;
+        const drew = anim.draw(this.x, this.y, flip);
+
         if (drew) {
-            ctx.globalCompositeOperation = 'source-atop';
-            ctx.fillStyle = 'rgba(200, 40, 40, 0.45)';
-            ctx.fillRect(this.x - PLAYER_W, this.y - PLAYER_H, PLAYER_W * 2, PLAYER_H * 2);
+            // red tint overlay using source-atop: paint only over drawn pixels.
+            // We re-draw the sprite then tint. Simplest: render tint on an
+            // offscreen canvas. For performance, skip offscreen and accept
+            // a rect overlay blended with multiply.
+            const sprite = SPRITES[anim.key];
+            const f = sprite.cfg.frames[anim.frame];
+            const scale = TARGET_H / f.h;
+            const dw = f.w * scale;
+            const dh = f.h * scale;
+            ctx.save();
+            ctx.globalCompositeOperation = 'multiply';
+            ctx.globalAlpha = 0.55;
+            ctx.translate(this.x, this.y);
+            if (flip) ctx.scale(-1, 1);
+            ctx.fillStyle = '#ff3030';
+            ctx.fillRect(-dw / 2, -dh / 2, dw, dh);
+            ctx.restore();
+        } else {
+            drawEnemyFallback(this.x, this.y, this.facing);
         }
-        ctx.restore();
-        if (!drew) drawEnemyFallback(this.x, this.y, this.facing);
     }
 }
 
@@ -426,7 +458,7 @@ function drawEnemyFallback(x, y, facing) {
 }
 
 // ------------------------------------------------------------
-// Particles (explosion, muzzle)
+// Particles
 // ------------------------------------------------------------
 class Particle {
     constructor(x, y, vx, vy, life, color, size) {
@@ -479,7 +511,7 @@ function spawnMuzzleFlash(x, y, facing) {
 }
 
 // ------------------------------------------------------------
-// Background (parallax)
+// Background
 // ------------------------------------------------------------
 const stars = [];
 for (let i = 0; i < 80; i++) {
@@ -492,7 +524,6 @@ for (let i = 0; i < 8; i++) {
 let bgOffset = 0;
 
 function drawBackground(dt) {
-    // sky gradient
     const g = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
     g.addColorStop(0, '#0b1633');
     g.addColorStop(0.6, '#42236a');
@@ -500,17 +531,14 @@ function drawBackground(dt) {
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, GROUND_Y);
 
-    // parallax offset follows player direction slightly
     if (player && player.alive) bgOffset += player.vx * 0.05 * dt;
 
-    // stars
     ctx.fillStyle = '#fff';
     for (const s of stars) {
         const sx = ((s.x - bgOffset * 0.3) % W + W) % W;
         ctx.fillRect(sx, s.y, s.s, s.s);
     }
 
-    // far mountains
     ctx.fillStyle = '#2a1a3a';
     for (const m of mountains) {
         const mx = ((m.x - bgOffset * 0.6) % (W + 200) + (W + 200)) % (W + 200) - 100;
@@ -522,13 +550,11 @@ function drawBackground(dt) {
         ctx.fill();
     }
 
-    // ground
     ctx.fillStyle = '#2d1a0e';
     ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
     ctx.fillStyle = '#5a3318';
     ctx.fillRect(0, GROUND_Y, W, 8);
 
-    // ground texture
     ctx.fillStyle = '#3a1f10';
     const tileOff = ((bgOffset) % 40 + 40) % 40;
     for (let x = -tileOff; x < W; x += 40) {
@@ -537,17 +563,17 @@ function drawBackground(dt) {
 }
 
 // ------------------------------------------------------------
-// Collision helper
+// Collision
 // ------------------------------------------------------------
 function aabb(a, b) {
     return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 }
 
 // ------------------------------------------------------------
-// Game state
+// Game
 // ------------------------------------------------------------
 const game = {
-    state: 'menu', // menu | playing | gameover
+    state: 'menu',
     score: 0,
     enemySpawnTimer: 2
 };
@@ -580,7 +606,6 @@ function update(dt) {
 
     player.update(dt);
 
-    // spawn enemies
     game.enemySpawnTimer -= dt;
     if (game.enemySpawnTimer <= 0 && enemies.length < 5) {
         const fromLeft = Math.random() < 0.5;
@@ -592,7 +617,6 @@ function update(dt) {
     for (const e of enemies) e.update(dt);
     for (const p of particles) p.update(dt);
 
-    // bullet vs enemy
     for (const b of bullets) {
         if (b.dead || b.fromEnemy) continue;
         for (const e of enemies) {
@@ -605,7 +629,6 @@ function update(dt) {
         }
     }
 
-    // enemy bullet vs player
     for (const b of bullets) {
         if (b.dead || !b.fromEnemy) continue;
         if (aabb(b.rect, player.rect)) {
@@ -614,7 +637,6 @@ function update(dt) {
         }
     }
 
-    // enemy body vs player
     for (const e of enemies) {
         if (e.dead) continue;
         if (aabb(e.rect, player.rect)) {
@@ -636,7 +658,7 @@ function render(dt) {
     for (const b of bullets) b.draw();
     for (const p of particles) p.draw();
 
-    if (assetsFailed) {
+    if (spritesMissing) {
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
         ctx.fillRect(0, H - 28, W, 28);
         ctx.fillStyle = '#ffbbbb';
@@ -646,7 +668,7 @@ function render(dt) {
 }
 
 // ------------------------------------------------------------
-// Main loop
+// Loop
 // ------------------------------------------------------------
 let lastTime = performance.now();
 function loop(now) {
@@ -657,9 +679,6 @@ function loop(now) {
     requestAnimationFrame(loop);
 }
 
-// ------------------------------------------------------------
-// Wiring
-// ------------------------------------------------------------
 document.getElementById('start-btn').addEventListener('click', startGame);
 document.getElementById('restart-btn').addEventListener('click', startGame);
 

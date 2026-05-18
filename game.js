@@ -324,10 +324,14 @@ class Bullet {
             ctx.arc(this.x, this.y, 18, 0, Math.PI * 2);
             ctx.fill();
         } else {
-            ctx.fillStyle = this.fromEnemy ? '#ff6644' : '#ffdd33';
+            ctx.fillStyle = this.fromEnemy ? '#ff66cc' : '#ffdd33';
             ctx.fillRect(this.x - 8, this.y - 2, 16, 4);
-            ctx.fillStyle = '#fff8cc';
+            ctx.fillStyle = this.fromEnemy ? '#ffe0ff' : '#fff8cc';
             ctx.fillRect(this.x - 3, this.y - 1, 6, 2);
+            if (this.fromEnemy) {
+                ctx.fillStyle = 'rgba(255, 100, 200, 0.35)';
+                ctx.fillRect(this.x - 12, this.y - 3, 24, 6);
+            }
         }
     }
 }
@@ -395,7 +399,7 @@ class Enemy {
             : this.anims.idle.draw(this.x, this.y, flip));
         if (drew) {
             ctx.globalCompositeOperation = 'source-atop';
-            ctx.fillStyle = 'rgba(200, 40, 40, 0.45)';
+            ctx.fillStyle = 'rgba(120, 40, 200, 0.55)';
             ctx.fillRect(this.x - PLAYER_W, this.y - PLAYER_H, PLAYER_W * 2, PLAYER_H * 2);
         }
         ctx.restore();
@@ -407,19 +411,19 @@ function drawEnemyFallback(x, y, facing) {
     ctx.save();
     ctx.translate(x, y);
     ctx.scale(facing, 1);
-    ctx.fillStyle = '#6a2020';
+    ctx.fillStyle = '#3a1a5a';
     ctx.fillRect(-18, -20, 36, 44);
-    ctx.fillStyle = '#2a2a2a';
+    ctx.fillStyle = '#1a1a2a';
     ctx.beginPath();
     ctx.arc(0, -28, 14, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = '#ff5a3c';
+    ctx.fillStyle = '#66ff88';
     ctx.beginPath();
     ctx.arc(4, -28, 9, 0, Math.PI * 2);
     ctx.fill();
     ctx.fillStyle = '#222';
     ctx.fillRect(6, -6, 34, 8);
-    ctx.fillStyle = '#4a1a1a';
+    ctx.fillStyle = '#2a1240';
     ctx.fillRect(-14, 24, 10, 12);
     ctx.fillRect(4, 24, 10, 12);
     ctx.restore();
@@ -479,60 +483,204 @@ function spawnMuzzleFlash(x, y, facing) {
 }
 
 // ------------------------------------------------------------
-// Background (parallax)
+// Background (parallax) - tema espacial
 // ------------------------------------------------------------
-const stars = [];
-for (let i = 0; i < 80; i++) {
-    stars.push({ x: Math.random() * W, y: Math.random() * (GROUND_Y - 40), s: Math.random() * 1.5 + 0.5 });
+const STAR_LAYERS = [
+    { count: 90, speed: 0.15, size: 1, color: '#5566aa' }, // longe
+    { count: 60, speed: 0.35, size: 1, color: '#aabbff' }, // medio
+    { count: 30, speed: 0.65, size: 2, color: '#ffffff' }  // perto
+];
+const starLayers = STAR_LAYERS.map(def => {
+    const stars = [];
+    for (let i = 0; i < def.count; i++) {
+        stars.push({
+            x: Math.random() * W,
+            y: Math.random() * (GROUND_Y - 30),
+            tw: Math.random() * Math.PI * 2
+        });
+    }
+    return { ...def, stars };
+});
+
+// planeta gigante no horizonte + lua
+const planet = { x: W * 0.78, y: GROUND_Y - 180, r: 110 };
+const moon   = { x: W * 0.22, y: 90, r: 28 };
+
+// cumes de asteroide no chao distante
+const ridges = [];
+for (let i = 0; i < 10; i++) {
+    ridges.push({
+        x: i * 130 + Math.random() * 30,
+        w: 180 + Math.random() * 60,
+        h: 50 + Math.random() * 80
+    });
 }
-const mountains = [];
-for (let i = 0; i < 8; i++) {
-    mountains.push({ x: i * 140 + Math.random() * 40, w: 200, h: 60 + Math.random() * 80 });
+// estacao orbital faixa media
+const stations = [];
+for (let i = 0; i < 3; i++) {
+    stations.push({
+        x: 200 + i * 360 + Math.random() * 80,
+        y: 70 + Math.random() * 80,
+        w: 70, h: 14
+    });
 }
+
 let bgOffset = 0;
+let bgTwinkle = 0;
 
 function drawBackground(dt) {
-    // sky gradient
+    // gradiente espacial profundo
     const g = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
-    g.addColorStop(0, '#0b1633');
-    g.addColorStop(0.6, '#42236a');
-    g.addColorStop(1, '#d66a2e');
+    g.addColorStop(0,    '#02030a');
+    g.addColorStop(0.45, '#0b0830');
+    g.addColorStop(0.85, '#1a0a3a');
+    g.addColorStop(1,    '#28104a');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, W, GROUND_Y);
 
-    // parallax offset follows player direction slightly
-    if (player && player.alive) bgOffset += player.vx * 0.05 * dt;
+    // nebulosa difusa
+    const neb = ctx.createRadialGradient(W * 0.35, GROUND_Y * 0.45, 30, W * 0.35, GROUND_Y * 0.45, 280);
+    neb.addColorStop(0, 'rgba(160, 60, 200, 0.25)');
+    neb.addColorStop(0.5, 'rgba(80, 30, 140, 0.12)');
+    neb.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = neb;
+    ctx.fillRect(0, 0, W, GROUND_Y);
 
-    // stars
-    ctx.fillStyle = '#fff';
-    for (const s of stars) {
-        const sx = ((s.x - bgOffset * 0.3) % W + W) % W;
-        ctx.fillRect(sx, s.y, s.s, s.s);
+    const neb2 = ctx.createRadialGradient(W * 0.7, GROUND_Y * 0.3, 30, W * 0.7, GROUND_Y * 0.3, 240);
+    neb2.addColorStop(0, 'rgba(40, 120, 200, 0.22)');
+    neb2.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = neb2;
+    ctx.fillRect(0, 0, W, GROUND_Y);
+
+    if (player && player.alive) bgOffset += player.vx * 0.05 * dt;
+    bgTwinkle += dt;
+
+    // estrelas em parallax + cintilancia
+    for (const layer of starLayers) {
+        ctx.fillStyle = layer.color;
+        for (const s of layer.stars) {
+            const sx = ((s.x - bgOffset * layer.speed) % W + W) % W;
+            const tw = 0.55 + 0.45 * Math.sin(bgTwinkle * 3 + s.tw);
+            ctx.globalAlpha = tw;
+            ctx.fillRect(sx, s.y, layer.size, layer.size);
+        }
+    }
+    ctx.globalAlpha = 1;
+
+    // lua pequena
+    const mx = ((moon.x - bgOffset * 0.2) % (W + 120) + (W + 120)) % (W + 120) - 60;
+    const mg = ctx.createRadialGradient(mx, moon.y, 4, mx, moon.y, moon.r);
+    mg.addColorStop(0, '#ffffff');
+    mg.addColorStop(0.5, '#cfd8ff');
+    mg.addColorStop(1, 'rgba(150,170,255,0)');
+    ctx.fillStyle = mg;
+    ctx.beginPath(); ctx.arc(mx, moon.y, moon.r, 0, Math.PI * 2); ctx.fill();
+
+    // planeta grande com anel
+    const px = ((planet.x - bgOffset * 0.35) % (W + 300) + (W + 300)) % (W + 300) - 150;
+    // anel atras
+    ctx.save();
+    ctx.translate(px, planet.y);
+    ctx.rotate(-0.25);
+    ctx.strokeStyle = 'rgba(200, 140, 90, 0.55)';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, planet.r * 1.55, planet.r * 0.4, 0, Math.PI, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+    // corpo
+    const pg = ctx.createRadialGradient(px - 30, planet.y - 30, 10, px, planet.y, planet.r);
+    pg.addColorStop(0, '#ffd1a0');
+    pg.addColorStop(0.5, '#d97a3a');
+    pg.addColorStop(1, '#4a1a0a');
+    ctx.fillStyle = pg;
+    ctx.beginPath(); ctx.arc(px, planet.y, planet.r, 0, Math.PI * 2); ctx.fill();
+    // anel na frente
+    ctx.save();
+    ctx.translate(px, planet.y);
+    ctx.rotate(-0.25);
+    ctx.strokeStyle = 'rgba(220, 160, 110, 0.85)';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, planet.r * 1.55, planet.r * 0.4, 0, 0, Math.PI);
+    ctx.stroke();
+    ctx.restore();
+
+    // estacao orbital (mini silhuetas)
+    for (const st of stations) {
+        const sx = ((st.x - bgOffset * 0.5) % (W + 200) + (W + 200)) % (W + 200) - 100;
+        ctx.fillStyle = '#5a6688';
+        ctx.fillRect(sx, st.y, st.w, st.h);
+        ctx.fillStyle = '#8aa0d0';
+        ctx.fillRect(sx, st.y, st.w, 3);
+        ctx.fillStyle = '#ffee66';
+        ctx.fillRect(sx + 4, st.y + 6, 2, 2);
+        ctx.fillRect(sx + 12, st.y + 6, 2, 2);
+        ctx.fillRect(sx + 20, st.y + 6, 2, 2);
+        // antena
+        ctx.fillStyle = '#aaaacc';
+        ctx.fillRect(sx + st.w / 2 - 1, st.y - 8, 2, 8);
     }
 
-    // far mountains
-    ctx.fillStyle = '#2a1a3a';
-    for (const m of mountains) {
-        const mx = ((m.x - bgOffset * 0.6) % (W + 200) + (W + 200)) % (W + 200) - 100;
+    // cumes de asteroide ao fundo
+    ctx.fillStyle = '#1a1030';
+    for (const m of ridges) {
+        const rx = ((m.x - bgOffset * 0.6) % (W + 220) + (W + 220)) % (W + 220) - 110;
         ctx.beginPath();
-        ctx.moveTo(mx, GROUND_Y);
-        ctx.lineTo(mx + m.w / 2, GROUND_Y - m.h);
-        ctx.lineTo(mx + m.w, GROUND_Y);
+        ctx.moveTo(rx, GROUND_Y);
+        ctx.lineTo(rx + m.w * 0.3, GROUND_Y - m.h * 0.7);
+        ctx.lineTo(rx + m.w * 0.55, GROUND_Y - m.h);
+        ctx.lineTo(rx + m.w * 0.8, GROUND_Y - m.h * 0.55);
+        ctx.lineTo(rx + m.w, GROUND_Y);
         ctx.closePath();
         ctx.fill();
     }
+    // cumes proximos com neon
+    ctx.fillStyle = '#2a1850';
+    for (let i = 0; i < 6; i++) {
+        const baseX = i * 220 + 80;
+        const rx = ((baseX - bgOffset * 1.1) % (W + 260) + (W + 260)) % (W + 260) - 130;
+        const h = 55 + (i % 3) * 18;
+        ctx.beginPath();
+        ctx.moveTo(rx, GROUND_Y);
+        ctx.lineTo(rx + 60, GROUND_Y - h);
+        ctx.lineTo(rx + 120, GROUND_Y - h * 0.5);
+        ctx.lineTo(rx + 200, GROUND_Y);
+        ctx.closePath();
+        ctx.fill();
+        // brilho neon na crista
+        ctx.strokeStyle = 'rgba(170, 90, 220, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(rx + 60, GROUND_Y - h);
+        ctx.lineTo(rx + 120, GROUND_Y - h * 0.5);
+        ctx.stroke();
+    }
 
-    // ground
-    ctx.fillStyle = '#2d1a0e';
+    // chao - superficie lunar / metalica
+    const ground = ctx.createLinearGradient(0, GROUND_Y, 0, H);
+    ground.addColorStop(0, '#3a2858');
+    ground.addColorStop(1, '#0a0418');
+    ctx.fillStyle = ground;
     ctx.fillRect(0, GROUND_Y, W, H - GROUND_Y);
-    ctx.fillStyle = '#5a3318';
-    ctx.fillRect(0, GROUND_Y, W, 8);
+    // crista superior em neon
+    ctx.fillStyle = '#8855dd';
+    ctx.fillRect(0, GROUND_Y, W, 2);
+    ctx.fillStyle = 'rgba(190, 120, 255, 0.5)';
+    ctx.fillRect(0, GROUND_Y + 2, W, 1);
 
-    // ground texture
-    ctx.fillStyle = '#3a1f10';
-    const tileOff = ((bgOffset) % 40 + 40) % 40;
-    for (let x = -tileOff; x < W; x += 40) {
-        ctx.fillRect(x, GROUND_Y + 20, 20, 4);
+    // padrao de placas de tile no chao
+    ctx.fillStyle = '#2a1c44';
+    const tileOff = ((bgOffset * 1.8) % 48 + 48) % 48;
+    for (let x = -tileOff; x < W; x += 48) {
+        ctx.fillRect(x, GROUND_Y + 8, 32, 2);
+        ctx.fillRect(x, GROUND_Y + 22, 32, 2);
+    }
+    // pontos de luz no chao
+    ctx.fillStyle = '#66ddff';
+    const dotOff = ((bgOffset * 1.8) % 96 + 96) % 96;
+    for (let x = -dotOff; x < W; x += 96) {
+        ctx.fillRect(x + 14, GROUND_Y + 14, 2, 2);
     }
 }
 
